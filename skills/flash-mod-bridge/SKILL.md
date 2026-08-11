@@ -47,8 +47,14 @@ ping_flash_bridge
 
 ## Flashpoint
 
-Default player pin: `FlashModding/flashpoint/`.  
-SWFs launch via Ruffle; webhosted path works with inject + this MCP.
+Preferred path for archive SWFs:
+
+1. Prebuilt `ruffle_desktop.exe` from Releases  
+2. `flashpoint/install-to-flashpoint.ps1 -DesktopExe ...`  
+3. Restart Flashpoint → play SWF → desktop bridge `:8768`  
+4. MCP hub `:8767` → `ping_flash_bridge`  
+
+See `flashpoint/README.md`. Webhosted embeds may still need inject.
 
 ## Limits
 

@@ -99,14 +99,42 @@ python run_mcp.py
 
 Restart the AI client after editing config.
 
-### 4. Web / inject (optional)
+### 4. Flashpoint (recommended for archive SWFs)
+
+[Flashpoint](https://flashpointarchive.org/) can launch every `.swf` through the **patched** Ruffle so the MCP sees a live player.
+
+```powershell
+# 1) Download ruffle_desktop.exe from Releases (step 1)
+# 2) Pin it as Flashpoint's Ruffle:
+cd flash-mod-bridge\flashpoint
+.\install-to-flashpoint.ps1 -DesktopExe "C:\Downloads\ruffle_desktop.exe"
+# non-default install path:
+# .\install-to-flashpoint.ps1 -FlashpointRoot "D:\Flashpoint" -DesktopExe "..."
+```
+
+Then:
+
+1. **Restart Flashpoint Launcher**  
+2. Play any Flash game (Ruffle window opens → bridge on **:8768**)  
+3. MCP hub running (`python run_mcp.py` on **:8767**)  
+4. Agent: `ping_flash_bridge` → should report a desktop player  
+
+| Detail | |
+|--------|--|
+| Installed as | `%Flashpoint%\Data\Ruffle\standalone\latest\ruffle.exe` |
+| Pin file | `Data\Ruffle\.mod-bridge-pin` (stops stock auto-update from overwriting) |
+| Undo | `flashpoint\uninstall-pin.ps1` |
+
+Full notes: [`flashpoint/README.md`](flashpoint/README.md).
+
+### 5. Web / inject (optional)
 
 - Selfhost: `host/` + a web build of the fork  
 - Or load `inject/` as an unpacked Chrome extension, then hard-refresh the player tab  
 
-Desktop prebuild + MCP is enough for most Flashpoint / local SWF workflows.
+For **Flashpoint standalone** SWFs you usually **do not** need inject.
 
-### 5. Agent tool order
+### 6. Agent tool order
 
 ```text
 ping_flash_bridge
