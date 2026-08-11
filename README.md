@@ -11,11 +11,11 @@ Get, set, call, find display objects, and edit **SharedObject** data in a runnin
 
 | Tool | Covers |
 |------|--------|
-| Upstream Ruffle | Play SWFs |
-| Generic browser MCP | Click DOM, not AVM objects |
+| Upstream Ruffle | Play SWFs (no agent API) |
+| Generic browser MCP | Click DOM / screenshots — not AVM objects |
 | **This** | **AVM-aware** paths: `root`, `stage`, `root/Child`, `so:Name\|prop` |
 
-No public **Ruffle / Flash AVM MCP** turned up in research when this shipped — first-mover claim for *this* product shape.
+Upstream Ruffle is the player. This repo adds a small **live object bridge** so agents can inspect and change Flash state without rewriting the SWF.
 
 ## Architecture
 
@@ -52,9 +52,25 @@ Default hub port: **8767** (Unity WebGL 8765, HTML5 8766 in the same suite).
 | [il2cpp-decompiler](https://github.com/rkuhn153/il2cpp-decompiler) | IL2CPP static decompile |
 | *This* | Flash / Ruffle live bridge |
 
-## Quick start (MCP)
+## Quick start
 
-### 1. Python hub
+### 1. Prebuilt Windows player (recommended)
+
+From **[Releases](https://github.com/rkuhn153/flash-mod-bridge/releases)**:
+
+| Asset | Role |
+|-------|------|
+| `ruffle_desktop.exe` | Patched Ruffle with **mod bridge** (HTTP **:8768**) |
+| Zip (if present) | Same binary + short notes |
+
+```powershell
+# open a SWF with the prebuilt player (bridge listens on 8768)
+.\ruffle_desktop.exe "D:\path\to\game.swf"
+```
+
+Building the fork yourself is **optional** — see [`engine/README.md`](engine/README.md) only if you need a custom Ruffle revision.
+
+### 2. Python MCP hub
 
 ```powershell
 git clone https://github.com/rkuhn153/flash-mod-bridge.git
@@ -65,7 +81,7 @@ pip install -r requirements.txt
 python run_mcp.py
 ```
 
-### 2. Wire the client
+### 3. Wire the client
 
 ```json
 {
@@ -83,14 +99,14 @@ python run_mcp.py
 
 Restart the AI client after editing config.
 
-### 3. Run a patched Ruffle player
+### 4. Web / inject (optional)
 
-You need a build with **`modBridgeRpc`** (see [`engine/README.md`](engine/README.md)):
+- Selfhost: `host/` + a web build of the fork  
+- Or load `inject/` as an unpacked Chrome extension, then hard-refresh the player tab  
 
-- **Desktop:** forked `ruffle.exe` opens SWF → HTTP bridge on **:8768** (hub falls back here).  
-- **Web:** selfhosted fork + `host/` static page, and/or load `inject/` as an unpacked Chrome extension, then hard-refresh the tab.
+Desktop prebuild + MCP is enough for most Flashpoint / local SWF workflows.
 
-### 4. Agent tool order
+### 5. Agent tool order
 
 ```text
 ping_flash_bridge
