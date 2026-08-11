@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Flash Mod Bridge</title>
+    <style>
+      body {
+        font: 13px/1.4 system-ui, sans-serif;
+        margin: 12px;
+        min-width: 280px;
+        background: #1a1520;
+        color: #f2e9f0;
+      }
+      code {
+        color: #ffb4e0;
+      }
+      #out {
+        white-space: pre-wrap;
+        font-family: ui-monospace, monospace;
+        font-size: 11px;
+        background: #0e0a12;
+        padding: 8px;
+        border-radius: 6px;
+      }
+      button {
+        margin: 4px 4px 4px 0;
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: 0;
+        background: #c44b8a;
+        color: #fff;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <h3>Flash Mod Bridge</h3>
+    <p>Hub <code>http://127.0.0.1:8767</code></p>
+    <button id="refresh">Refresh health</button>
+    <button id="open">Open hub</button>
+    <div id="out">…</div>
+    <script src="bridge.js"></script>
+  </body>
+</html>

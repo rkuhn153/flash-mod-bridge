@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Flash Mod Bridge — Ruffle host</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        background: #120e16;
+        color: #f4ecf2;
+      }
+      header {
+        padding: 12px 16px;
+        background: #1c1522;
+        border-bottom: 1px solid #3a2a40;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+      input[type="text"] {
+        flex: 1;
+        min-width: 200px;
+        padding: 8px;
+        border-radius: 6px;
+        border: 1px solid #4a3555;
+        background: #0d0a10;
+        color: inherit;
+      }
+      button {
+        padding: 8px 12px;
+        border: 0;
+        border-radius: 6px;
+        background: #c44b8a;
+        color: #fff;
+        cursor: pointer;
+      }
+      #player {
+        width: min(960px, 100%);
+        height: 600px;
+        margin: 16px auto;
+        background: #000;
+      }
+      #log {
+        max-width: 960px;
+        margin: 0 auto 24px;
+        padding: 12px;
+        background: #0d0a10;
+        border-radius: 8px;
+        font: 12px/1.4 ui-monospace, monospace;
+        white-space: pre-wrap;
+      }
+      .hint {
+        opacity: 0.75;
+        font-size: 12px;
+      }
+    </style>
+    <!--
+      Point these scripts at your built forked Ruffle selfhosted package.
+      Example after `npm run build` in FlashModding/web:
+        <script src="../path/to/ruffle.js"></script>
+      Or copy dist into ./ruffle/ next to this file.
+    -->
+    <script src="./ruffle/ruffle.js"></script>
+  </head>
+  <body>
+    <header>
+      <strong>Flash Mod Bridge host</strong>
+      <input id="url" type="text" placeholder="SWF URL or leave empty and use file…" />
+      <input id="file" type="file" accept=".swf,application/x-shockwave-flash" />
+      <button id="load">Load</button>
+      <button id="ping">Ping bridge</button>
+      <span class="hint">Uses forked Ruffle with modBridgeRpc — hub :8767</span>
+    </header>
+    <div id="player"></div>
+    <pre id="log">Ready. Load a SWF with the forked Ruffle build in ./ruffle/</pre>
+    <script>
+      const logEl = document.getElementById("log");
+      const playerBox = document.getElementById("player");
+      let player = null;
+
+      function log(msg) {
+        logEl.textContent = typeof msg === "string" ? msg : JSON.stringify(msg, null, 2);
+      }
+
+      function ensurePlayer() {
+        if (player) return player;
+        if (!window.RufflePlayer) {
+          log("Ruffle not found. Copy forked selfhosted build to host/ruffle/ (ruffle.js + wasm).");
+          return null;
+        }
+        const rp = window.RufflePlayer.newest();
+        player = rp.createPlayer();
+        player.style.width = "100%";
+        player.style.height = "100%";
+        playerBox.innerHTML = "";
+        playerBox.appendChild(player);
+        return player;
+      }
+
+      document.getElementById("load").onclick = async () => {
+        const p = ensurePlayer();
+        if (!p) return;
+        const file = document.getElementById("file").files[0];
+        const url = document.getElementById("url").value.trim();
+        try {
+          if (file) {
+            const buf = await file.arrayBuffer();
+            await p.load({ data: new Uint8Array(buf), swfFileName: file.name });
+            log("Loaded file " + file.name);
+          } else if (url) {
+            await p.load(url);
+            log("Loaded url " + url);
+          } else {
+            log("Pick a file or enter a SWF URL");
+          }
+        } catch (e) {
+          log("Load error: " + e);
+        }
+      };
+
+      document.getElementById("ping").onclick = () => {
+        const p = player || document.querySelector("ruffle-player");
+        if (!p) {
+          log("No player");
+          return;
+        }
+        if (typeof p.modBridgeRpc !== "function") {
+          log(
+            "Player has no modBridgeRpc — this is stock Ruffle or the JS wrapper does not forward the method yet.\n" +
+              "Core WASM exposes it on RuffleHandle; wire public player TS next if needed.\n" +
+              "Try: p.__ruffle_player or inspect element."
+          );
+          // still try common internals
+          const candidates = [p, p.ruffle, p._native_player, p.instance];
+          for (const c of candidates) {
+            if (c && typeof c.modBridgeRpc === "function") {
+              log(JSON.parse(c.modBridgeRpc(JSON.stringify({ op: "ping" }))));
+              return;
+            }
+          }
+          return;
+        }
+        log(JSON.parse(p.modBridgeRpc(JSON.stringify({ op: "ping" }))));
+      };
+    </script>
+  </body>
+</html>

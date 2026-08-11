@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "FlashModBridge",
+  "version": "0.1.0",
+  "description": "Page agent for forked Ruffle mod bridge (hub :8767)",
+  "permissions": ["storage", "tabs", "scripting"],
+  "host_permissions": ["http://127.0.0.1:8767/*", "http://localhost:8767/*", "<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Flash Mod Bridge",
+    "default_popup": "bridge.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content_agent.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["page_world.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
