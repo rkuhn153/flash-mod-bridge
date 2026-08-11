@@ -1,93 +1,139 @@
 # flash-mod-bridge
 
-**Live Flash / Ruffle mod bridge for AI agents (MCP).**
+Live **Flash / Ruffle** bridge for AI agents and tools via **MCP (Model Context Protocol)**.
 
-Get, set, call, find display objects, and edit **SharedObject** data in a running SWF — **no reload** for in-memory state — via a forked [Ruffle](https://github.com/ruffle-rs/ruffle) player + Python MCP hub.
+Inspect a running SWF, walk the display list, get/set properties, call methods, and edit **SharedObject** data — **without reloading** for in-memory state — through a forked [Ruffle](https://github.com/ruffle-rs/ruffle) player plus a Python MCP hub.
 
-> **Status:** Early public release. Needs a **patched Ruffle** (this repo is not upstream Ruffle).  
-> Not AwayFL. Not Unity/HTML5 JS engines (see suite links below).
+This is **not** stock Ruffle (no agent API). It is **not** AwayFL, Unity, or HTML5/Phaser (see suite links below).
 
-## Why this exists
+| Piece | Path | Role |
+|--------|------|------|
+| Patched Ruffle (desktop) | [Releases](https://github.com/rkuhn153/flash-mod-bridge/releases) → `ruffle_desktop.exe` | Play SWF + HTTP mod bridge **:8768** |
+| Engine patches | `engine/` | `modBridgeRpc` sources to drop into a Ruffle tree |
+| MCP hub | `run_mcp.py`, `translator/` | FastMCP tools (hub **:8767**) |
+| Chrome inject | `inject/` | Optional page agent for web Ruffle |
+| Self-host page | `host/` | Simple local player host |
+| Flashpoint pin | `flashpoint/` | Install fork as Flashpoint’s default Ruffle |
+| Agent skill | `skills/flash-mod-bridge/` | How agents should use the tools |
 
-| Tool | Covers |
-|------|--------|
-| Upstream Ruffle | Play SWFs (no agent API) |
-| Generic browser MCP | Click DOM / screenshots — not AVM objects |
-| **This** | **AVM-aware** paths: `root`, `stage`, `root/Child`, `so:Name\|prop` |
+**Status:** Early public release. Core path is desktop + Flashpoint; web inject is optional.
 
-Upstream Ruffle is the player. This repo adds a small **live object bridge** so agents can inspect and change Flash state without rewriting the SWF.
+## What you can do
 
-## Architecture
+| Area | Capabilities |
+|------|----------------|
+| **Discover** | List display tree, find by keywords, list props on a path |
+| **Read / write** | Get/set AVM properties by path (`root`, `stage`, `root/Child`) |
+| **Call** | Invoke methods on display objects with JSON args |
+| **SharedObject** | List SOs, set SO properties (saves / persistent data) |
+| **Raw RPC** | Pass through any player JSON op via `flash_mod_rpc` |
+| **Transport** | Desktop HTTP bridge, or Chrome inject when using web Ruffle |
+
+**Not supported:** stock ruffle.rs builds (no `modBridgeRpc`), AwayFL runtimes, or rewriting the SWF on disk. Prefer live paths over re-decompiling ActionScript unless you have a separate pipeline.
+
+**Always start with** `ping_flash_bridge` so you know a player/agent is connected before bulk get/set.
+
+## How it fits together
 
 ```text
   Agent (Cursor / Claude / Grok)
        │  MCP stdio
-  run_mcp.py + translator/     Python FastMCP  (:8767 hub)
+  run_mcp.py + translator/          hub :8767
        │  HTTP
-  ┌────┴─────────────────────┐
-  │ Desktop forked ruffle    │  :8768  (Flashpoint / local SWF)
-  │ Web forked Ruffle +      │  inject/ Chrome agent or host/
-  │   modBridgeRpc           │
-  └──────────────────────────┘
+  ┌────┴──────────────────────────┐
+  │ Desktop forked ruffle         │  :8768  ← Flashpoint / local SWF
+  │ Web forked Ruffle + inject/   │  optional browser path
+  └───────────────────────────────┘
        │
-  AVM2 / display list / SharedObject
+  AVM display list / SharedObject
 ```
 
-| Piece | Path |
-|-------|------|
-| MCP server | `run_mcp.py`, `translator/` |
-| Chrome inject | `inject/` (load unpacked) |
-| Self-host page | `host/` |
-| Engine patches | `engine/` (drop into a Ruffle tree) |
-| Agent skill | `skills/flash-mod-bridge/` |
+| Port | Who |
+|------|-----|
+| **8767** | Python MCP hub (agents connect here) |
+| **8768** | Desktop Ruffle mod-bridge HTTP (hub falls back here) |
+| 8765 / 8766 | Other suite tools (Unity WebGL / HTML5) — not this repo |
 
-Default hub port: **8767** (Unity WebGL 8765, HTML5 8766 in the same suite).
+## MCP tools
 
-## Related projects
+Names as exposed by `translator/server.py`:
 
-| Repo | Role |
-|------|------|
-| [bepinex-mcp](https://github.com/rkuhn153/bepinex-mcp) | Live Unity + BepInEx |
-| [gamecode-rag](https://github.com/rkuhn153/gamecode-rag) | Mono C# search |
-| [il2cpp-decompiler](https://github.com/rkuhn153/il2cpp-decompiler) | IL2CPP static decompile |
-| *This* | Flash / Ruffle live bridge |
+### Connection
+- `ping_flash_bridge` — hub health, desktop player, connected agents
+- `list_connected_agents` — which inject/desktop endpoints are live
+- `flash_ping` — ping the player RPC
+- `flash_mod_rpc` — raw JSON request string to the player
+
+### Display list & values
+- `flash_list_display` — walk tree (`max_depth`, `limit`)
+- `flash_find` — keyword search (money, score, day, …)
+- `flash_list_props` — properties on a path (default `root`)
+- `flash_get` / `flash_set` — read/write by path (`value_json` for set)
+- `flash_call` — `path` + `method` + `args_json`
+
+### SharedObject
+- `flash_list_so` — known SharedObjects
+- `flash_set_so_prop` — set one SO field (`name`, `prop`, `value_json`)
+
+### Paths
+
+| Path | Meaning |
+|------|---------|
+| `stage` | Stage AS3 object |
+| `root` | Root movie clip |
+| `root/Child/Grand` | Display-list walk |
+| `so:name` | Live SharedObject **data** |
+| `so:name\|prop` | SO property (`\|` when name has `/` or `.`) |
+
+## Requirements
+
+- **Windows x64** for the prebuilt desktop player (typical)
+- **Python 3.10+** for the MCP hub
+- A **patched Ruffle** build with mod bridge (prebuilt release **or** apply `engine/` yourself)
+- Optional: [Flashpoint](https://flashpointarchive.org/) for archive SWFs
+- Optional: Chrome for `inject/` + web selfhosted Ruffle
+
+Upstream Ruffle quality limits AS1/AS2/AS3 compatibility — this bridge cannot fix content Ruffle cannot run.
 
 ## Quick start
 
-### 1. Prebuilt Windows player (recommended)
+### 1. Get the patched player (recommended)
 
-From **[Releases](https://github.com/rkuhn153/flash-mod-bridge/releases)**:
+From **[Releases](https://github.com/rkuhn153/flash-mod-bridge/releases)** (tag **`continuous`**):
 
 | Asset | Role |
 |-------|------|
-| `ruffle_desktop.exe` | Patched Ruffle with **mod bridge** (HTTP **:8768**) |
-| Zip (if present) | Same binary + short notes |
+| `ruffle_desktop.exe` | Patched Ruffle + mod bridge (**:8768**) |
+| `flash-mod-bridge-mcp.zip` | Python hub + inject/host (optional zip) |
 
 ```powershell
-# open a SWF with the prebuilt player (bridge listens on 8768)
 .\ruffle_desktop.exe "D:\path\to\game.swf"
 ```
 
-Building the fork yourself is **optional** — see [`engine/README.md`](engine/README.md) only if you need a custom Ruffle revision.
+Building from source is **optional** — see [`engine/README.md`](engine/README.md).
 
-### 2. Python MCP hub
+### 2. Run the MCP hub
 
 ```powershell
 git clone https://github.com/rkuhn153/flash-mod-bridge.git
 cd flash-mod-bridge
 python -m venv .venv
-.\.venv\Scripts\activate   # Windows
+.\.venv\Scripts\activate
 pip install -r requirements.txt
 python run_mcp.py
 ```
 
-### 3. Wire the client
+Hub listens on **8767** by default (`FLASH_MOD_BRIDGE_PORT`).
+
+### 3. Wire an MCP client
+
+**Cursor** (`~/.cursor/mcp.json`):
 
 ```json
 {
   "mcpServers": {
     "flash-mod-bridge": {
-      "command": "C:/path/to/python.exe",
+      "command": "C:/Python313/python.exe",
       "args": ["C:/path/to/flash-mod-bridge/run_mcp.py"],
       "env": {
         "FLASH_MOD_BRIDGE_PORT": "8767"
@@ -97,57 +143,70 @@ python run_mcp.py
 }
 ```
 
-Restart the AI client after editing config.
+**Grok Build** (`~/.grok/config.toml`):
 
-### 4. Flashpoint (recommended for archive SWFs)
+```toml
+[mcp_servers.flash-mod-bridge]
+command = 'C:\Python313\python.exe'
+args = ['C:\path\to\flash-mod-bridge\run_mcp.py']
+enabled = true
 
-[Flashpoint](https://flashpointarchive.org/) can launch every `.swf` through the **patched** Ruffle so the MCP sees a live player.
+[mcp_servers.flash-mod-bridge.env]
+FLASH_MOD_BRIDGE_PORT = "8767"
+```
+
+Restart the client (or reload MCP) after config changes.
+
+### 4. Flashpoint (best for archive SWFs)
+
+Pin the prebuilt player so every Flashpoint `.swf` launches with the bridge:
 
 ```powershell
-# 1) Download ruffle_desktop.exe from Releases (step 1)
-# 2) Pin it as Flashpoint's Ruffle:
 cd flash-mod-bridge\flashpoint
 .\install-to-flashpoint.ps1 -DesktopExe "C:\Downloads\ruffle_desktop.exe"
-# non-default install path:
 # .\install-to-flashpoint.ps1 -FlashpointRoot "D:\Flashpoint" -DesktopExe "..."
 ```
 
 Then:
 
 1. **Restart Flashpoint Launcher**  
-2. Play any Flash game (Ruffle window opens → bridge on **:8768**)  
-3. MCP hub running (`python run_mcp.py` on **:8767**)  
-4. Agent: `ping_flash_bridge` → should report a desktop player  
+2. Play any Flash game → forked Ruffle → **:8768**  
+3. MCP hub running (`python run_mcp.py`)  
+4. Agent: `ping_flash_bridge`  
 
 | Detail | |
 |--------|--|
 | Installed as | `%Flashpoint%\Data\Ruffle\standalone\latest\ruffle.exe` |
-| Pin file | `Data\Ruffle\.mod-bridge-pin` (stops stock auto-update from overwriting) |
+| Pin | `Data\Ruffle\.mod-bridge-pin` (blocks stock auto-update) |
 | Undo | `flashpoint\uninstall-pin.ps1` |
 
 Full notes: [`flashpoint/README.md`](flashpoint/README.md).
 
 ### 5. Web / inject (optional)
 
-- Selfhost: `host/` + a web build of the fork  
-- Or load `inject/` as an unpacked Chrome extension, then hard-refresh the player tab  
+- Build web selfhosted from a patched Ruffle tree; serve `host/`  
+- Load `inject/` as an **unpacked** Chrome extension; hard-refresh the player tab  
 
-For **Flashpoint standalone** SWFs you usually **do not** need inject.
+For **Flashpoint standalone** you usually **do not** need inject.
 
-### 6. Agent tool order
+### 6. First agent session
 
 ```text
 ping_flash_bridge
   → flash_list_display / flash_find
-  → flash_get / flash_set / flash_call
+  → flash_list_props / flash_get
+  → flash_set / flash_call
   → flash_list_so / flash_set_so_prop
 ```
 
-## JSON RPC (player)
+## Player JSON RPC (reference)
+
+The desktop/web player speaks the same ops the MCP wraps:
 
 ```json
 {"op":"ping"}
 {"op":"list_display","max_depth":3,"limit":100}
+{"op":"list_props","path":"root"}
 {"op":"get","path":"root.someProp"}
 {"op":"set","path":"root.someProp","value":999999}
 {"op":"call","path":"root","method":"play","args":[]}
@@ -156,21 +215,55 @@ ping_flash_bridge
 {"op":"set_so_prop","name":"//example_so","prop":"coins","value":999}
 ```
 
-| Path | Meaning |
-|------|---------|
-| `stage` / `root` | Stage or root clip |
-| `root/Child/Grand` | Display list walk |
-| `so:name` | SharedObject data |
-| `so:name\|prop` | SO property (`\|` if name has `/` or `.`) |
+Use `flash_mod_rpc` with a JSON string when you need an op not wrapped by a dedicated tool.
+
+## AI skills
+
+| Skill | Role |
+|--------|------|
+| [`skills/flash-mod-bridge`](skills/flash-mod-bridge/SKILL.md) | Tool order, paths, Flashpoint, limits |
+
+```powershell
+Copy-Item ".\skills\flash-mod-bridge" "$env:USERPROFILE\.cursor\skills\flash-mod-bridge" -Recurse -Force
+```
+
+## Related projects (same suite)
+
+| Need | Repo |
+|------|------|
+| Live **Flash / Ruffle** (this) | [flash-mod-bridge](https://github.com/rkuhn153/flash-mod-bridge) |
+| Live **Unity** get/set/patch | [bepinex-mcp](https://github.com/rkuhn153/bepinex-mcp) |
+| Live **Unreal runtime** (UE4SS) | [unreal-engine-mcp](https://github.com/rkuhn153/unreal-engine-mcp) |
+| Mono C# search | [gamecode-rag](https://github.com/rkuhn153/gamecode-rag) |
+| IL2CPP static decompile | [il2cpp-decompiler](https://github.com/rkuhn153/il2cpp-decompiler) |
 
 ## Limits
 
-- Requires **this fork’s** Ruffle — stock ruffle.rs builds will not answer `modBridgeRpc`.  
-- AS1/AS2 vs AS3 coverage follows **upstream Ruffle** quality.  
-- Coolmath / AwayFL titles need rehost on the fork (or another path).  
-- Experimental: bad paths or heavy call spam can still upset a SWF.
+- **Stock Ruffle** has no `modBridgeRpc` — must use prebuilt or patched build.  
+- Content must **run in Ruffle**; bridge quality follows emulator support.  
+- **AwayFL** / some Coolmath hosts need rehost on the fork.  
+- Bad paths or spammy set/call can still upset a SWF.  
+- Nested object writes are more limited than simple primitives.
+
+## Layout
+
+```text
+flash-mod-bridge/
+  run_mcp.py              # MCP entry
+  translator/             # FastMCP + HTTP hub
+  inject/                 # Chrome extension agent
+  host/                   # Simple self-host page
+  engine/                 # Ruffle patch sources
+  flashpoint/             # Install/uninstall pin scripts
+  skills/flash-mod-bridge/
+  samples/
+  requirements.txt
+  README.md
+  LICENSE
+```
 
 ## License
 
-- MCP, inject, host, samples: **MIT** — see [LICENSE](LICENSE).  
-- Ruffle engine: **MIT / Apache-2.0** (upstream). Patches in `engine/` are meant to apply to that tree.
+- MCP, inject, host, samples, scripts: **MIT** — see [LICENSE](LICENSE).  
+- Ruffle engine: **MIT / Apache-2.0** (upstream). Patches in `engine/` are intended for that tree.  
+- Prebuilt `ruffle_desktop.exe` includes our mod-bridge patches on top of Ruffle.
